@@ -196,7 +196,8 @@ Return Value:
 void *worker_thread(void *arg)
 {
     int ok = 1, frame_size = 0, rc = 0;
-    char buffer1[1024] = {0}, buffer2[1024] = {0};
+    char buffer1[1024] = {0};
+    char buffer2[] = "/tmp/out.jpg";
     unsigned long long counter = 0;
     time_t t;
     struct tm *now;
@@ -214,7 +215,7 @@ void *worker_thread(void *arg)
         frame_size = pglobal->in[input_number].size;
 
         /* check if buffer for frame is large enough, increase it if necessary */
-        if(frame_size > max_frame_size) {
+     /*   if(frame_size > max_frame_size) {
             DBG("increasing buffer size to %d\n", frame_size);
 
             max_frame_size = frame_size + (1 << 16);
@@ -226,48 +227,24 @@ void *worker_thread(void *arg)
 
             frame = tmp_framebuffer;
         }
-
+*/
         /* copy frame to our local buffer now */
-        memcpy(frame, pglobal->in[input_number].buf, frame_size);
+       // memcpy(frame, pglobal->in[input_number].buf, frame_size);
 
-        /* allow others to access the global buffer again */
-        pthread_mutex_unlock(&pglobal->in[input_number].db);
-
-        /* prepare filename */
-        memset(buffer1, 0, sizeof(buffer1));
-        memset(buffer2, 0, sizeof(buffer2));
-
-        /* get current time */
-        t = time(NULL);
-        now = localtime(&t);
-        if(now == NULL) {
-            perror("localtime");
-            return NULL;
-        }
-
-        /* prepare string, add time and date values */
-        if(strftime(buffer1, sizeof(buffer1), "%%s/%Y_%m_%d_%H_%M_%S_picture_%%09llu.jpg", now) == 0) {
-            OPRINT("strftime returned 0\n");
-            free(frame); frame = NULL;
-            return NULL;
-        }
-
-        /* finish filename by adding the foldername and a counter value */
-        snprintf(buffer2, sizeof(buffer2), buffer1, folder, counter);
-
-        counter++;
 
         DBG("writing file: %s\n", buffer2);
 
         /* open file for write */
         if((fd = open(buffer2, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
             OPRINT("could not open the file %s\n", buffer2);
+            pthread_mutex_unlock(&pglobal->in[input_number].db);
             return NULL;
         }
 
         /* save picture to file */
-        if(write(fd, frame, frame_size) < 0) {
+        if(write(fd, pglobal->in[input_number].buf, frame_size) < 0) {
             OPRINT("could not write to file %s\n", buffer2);
+            pthread_mutex_unlock(&pglobal->in[input_number].db);
             perror("write()");
             close(fd);
             return NULL;
@@ -275,42 +252,69 @@ void *worker_thread(void *arg)
 
         close(fd);
 
+        /* allow others to access the global buffer again */
+        pthread_mutex_unlock(&pglobal->in[input_number].db);
+
+        /* prepare filename */
+       // memset(buffer1, 0, sizeof(buffer1));
+       // memset(buffer2, 0, sizeof(buffer2));
+
+        /* get current time 
+        t = time(NULL);
+        now = localtime(&t);
+        if(now == NULL) {
+            perror("localtime");
+            return NULL;
+        }*/
+
+        /* prepare string, add time and date values */
+       /* if(strftime(buffer1, sizeof(buffer1), "%%s/%Y_%m_%d_%H_%M_%S_picture_%%09llu.jpg", now) == 0) {
+            OPRINT("strftime returned 0\n");
+            free(frame); frame = NULL;
+            return NULL;
+        }*/
+
+        /* finish filename by adding the foldername and a counter value */
+        //snprintf(buffer2, sizeof(buffer2), buffer1, folder, counter);
+
+  //      counter++;
+
         /* call the command if user specified one, pass current filename as argument */
-        if(command != NULL) {
+      /*  if(command != NULL) {
             memset(buffer1, 0, sizeof(buffer1));
-
+*/
             /* buffer2 still contains the filename, pass it to the command as parameter */
-            snprintf(buffer1, sizeof(buffer1), "%s \"%s\"", command, buffer2);
+  /*          snprintf(buffer1, sizeof(buffer1), "%s \"%s\"", command, buffer2);
             DBG("calling command %s", buffer1);
-
+*/
             /* in addition provide the filename as environment variable */
-            if((rc = setenv("MJPG_FILE", buffer2, 1)) != 0) {
+  /*          if((rc = setenv("MJPG_FILE", buffer2, 1)) != 0) {
                 LOG("setenv failed (return value %d)\n", rc);
             }
-
+*/
             /* execute the command now */
-            if((rc = system(buffer1)) != 0) {
+           /* if((rc = system(buffer1)) != 0) {
                 LOG("command failed (return value %d)\n", rc);
             }
         }
-
+*/
         /*
          * maintain ringbuffer
          * do not maintain ringbuffer for each picture, this saves ressources since
          * each run of the maintainance function involves sorting/malloc/free operations
          */
-        if(ringbuffer_exceed <= 0) {
+  //      if(ringbuffer_exceed <= 0) {
             /* keep ringbuffer excactly at specified size */
-            maintain_ringbuffer(ringbuffer_size);
+    /*        maintain_ringbuffer(ringbuffer_size);
         } else if(counter == 1 || counter % (ringbuffer_exceed + 1) == 0) {
             DBG("counter: %llu, will clean-up now\n", counter);
             maintain_ringbuffer(ringbuffer_size);
         }
-
+*/
         /* if specified, wait now */
-        if(delay > 0) {
+  /*      if(delay > 0) {
             usleep(1000 * delay);
-        }
+        }*/
     }
 
     /* cleanup now */
