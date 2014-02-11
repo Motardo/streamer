@@ -364,6 +364,11 @@ void *cam_thread(void *arg)
 
     context *pcontext = arg;
     pglobal = pcontext->pglobal;
+    sigset_t set;
+    int sig, s;
+
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR1);
 
     /* set cleanup handler to cleanup allocated ressources */
     pthread_cleanup_push(cam_cleanup, pcontext);
@@ -421,18 +426,29 @@ void *cam_thread(void *arg)
         /* copy this frame's timestamp to user space */
         pglobal->in[pcontext->id].timestamp = pcontext->videoIn->buf.timestamp;
 
+
+        // wait for signal
+        s = sigwait(&set, &sig);
+         
+        /* register signal handler for USR1 in order to get next frame */
+        if(s != 0) {
+            LOG("sigwait error\n");
+            closelog();
+            exit(EXIT_FAILURE);
+        }
+        //printf("input worker got usr1 signal");
+
         /* signal fresh_frame */
         pthread_cond_broadcast(&pglobal->in[pcontext->id].db_update);
         pthread_mutex_unlock(&pglobal->in[pcontext->id].db);
 
-
         /* only use usleep if the fps is below 5, otherwise the overhead is too long */
-        if(pcontext->videoIn->fps < 5) {
+        /*if(pcontext->videoIn->fps < 5) {
             DBG("waiting for next frame for %d us\n", 1000 * 1000 / pcontext->videoIn->fps);
             usleep(1000 * 1000 / pcontext->videoIn->fps);
         } else {
             DBG("waiting for next frame\n");
-        }
+        }*/
     }
 
     DBG("leaving input thread, calling cleanup function now\n");

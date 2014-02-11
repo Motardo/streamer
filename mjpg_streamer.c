@@ -182,12 +182,21 @@ int main(int argc, char *argv[])
     //char *input  = "input_uvc.so --resolution 640x480 --fps 5 --device /dev/video0";
     char *input[MAX_INPUT_PLUGINS];
     char *output[MAX_OUTPUT_PLUGINS];
-    int daemon = 0, i;
+    int daemon = 0, i, s;
     size_t tmp = 0;
+    sigset_t set;
 
     output[0] = "output_http.so --port 8080";
     global.outcnt = 0;
 
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR1);
+    s = pthread_sigmask(SIG_BLOCK, &set, NULL);
+    if (s != 0) {
+        LOG("could not pthread_sigmask\n");
+        closelog();
+        exit(EXIT_FAILURE);
+    }
 
     /* parameter parsing */
     while(1) {
@@ -278,12 +287,22 @@ int main(int argc, char *argv[])
     /* ignore SIGPIPE (send by OS if transmitting to closed TCP sockets) */
     signal(SIGPIPE, SIG_IGN);
 
+    /* ignore SIGUSR1 until ready to wait next frame */
+    signal(SIGUSR1, SIG_IGN);
+
     /* register signal handler for <CTRL>+C in order to clean up */
     if(signal(SIGINT, signal_handler) == SIG_ERR) {
         LOG("could not register signal handler\n");
         closelog();
         exit(EXIT_FAILURE);
     }
+
+    /* register signal handler for USR1 in order to get next frame 
+    if(signal(SIGUSR1, usr1_signal_handler) == SIG_ERR) {
+        LOG("could not register USR1 signal handler\n");
+        closelog();
+        exit(EXIT_FAILURE);
+    }*/
 
     /*
      * messages like the following will only be visible on your terminal

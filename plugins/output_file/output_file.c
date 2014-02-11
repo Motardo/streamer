@@ -25,6 +25,7 @@
 #include <string.h>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
+#include <sys/file.h>
 #include <errno.h>
 #include <signal.h>
 #include <sys/socket.h>
@@ -46,7 +47,7 @@
 
 static pthread_t worker;
 static globals *pglobal;
-static int fd, delay, ringbuffer_size = -1, ringbuffer_exceed = 0, max_frame_size;
+static int fd, delay, ringbuffer_size = -1, ringbuffer_exceed = 0;
 static char *folder = "/tmp";
 static unsigned char *frame = NULL;
 static char *command = NULL;
@@ -187,6 +188,17 @@ void maintain_ringbuffer(int size)
     free(namelist);
 }
 
+/*****************************************************************************
+ * Signal handler for USR1
+ * **************************************************************************/
+void usr1_signal_handler(int sig)
+{
+  // do nothing
+  if (sig == SIGUSR1) {
+    usleep(1);
+  }
+}
+
 /******************************************************************************
 Description.: this is the main worker thread
               it loops forever, grabs a fresh frame and stores it to file
@@ -195,14 +207,23 @@ Return Value:
 ******************************************************************************/
 void *worker_thread(void *arg)
 {
-    int ok = 1, frame_size = 0, rc = 0;
-    char buffer1[1024] = {0};
+    int ok = 1, frame_size = 0; //, rc = 0;
     char buffer2[] = "/tmp/out.jpg";
-    unsigned long long counter = 0;
-    time_t t;
-    struct tm *now;
-    unsigned char *tmp_framebuffer = NULL;
+    //sigset_t set;
+    //int sig, s;
+    //unsigned long long counter = 0;
+    //time_t t;
+    //struct tm *now;
+    //unsigned char *tmp_framebuffer = NULL;
 
+        /* register signal handler for USR1 in order to get next frame */
+        /*if(signal(SIGUSR1, usr1_signal_handler) == SIG_ERR) {
+            LOG("could not register USR1 signal handler\n");
+            closelog();
+            exit(EXIT_FAILURE);
+        }*/
+    //sigemptyset(&set);
+    //sigaddset(&set, SIGUSR1);
     /* set cleanup handler to cleanup allocated ressources */
     pthread_cleanup_push(worker_cleanup, NULL);
 
@@ -241,22 +262,45 @@ void *worker_thread(void *arg)
             return NULL;
         }
 
+        /* get exclusive lock on file 
+        if (flock(fd, LOCK_EX)) {
+            OPRINT("could not lock the file %s\n", buffer2);
+            pthread_mutex_unlock(&pglobal->in[input_number].db);
+            return NULL;
+        }*/
+
         /* save picture to file */
         if(write(fd, pglobal->in[input_number].buf, frame_size) < 0) {
             OPRINT("could not write to file %s\n", buffer2);
             pthread_mutex_unlock(&pglobal->in[input_number].db);
             perror("write()");
+           // flock(fd, LOCK_UN);
             close(fd);
             return NULL;
         }
 
+        //flock(fd, LOCK_UN);
         close(fd);
 
         /* allow others to access the global buffer again */
         pthread_mutex_unlock(&pglobal->in[input_number].db);
 
+        // wait for signal
+        //s = sigwait(&set, &sig);
+         
+        /* register signal handler for USR1 in order to get next frame */
+        /*if(s != 0) {
+            LOG("sigwait error\n");
+            closelog();
+            exit(EXIT_FAILURE);
+        }
+        printf("got usr1 signal");
+*/
+        // ignore signal
+        /* ignore SIGUSR1 until ready to wait next frame */
+        //signal(SIGUSR1, SIG_IGN);
+        
         /* prepare filename */
-       // memset(buffer1, 0, sizeof(buffer1));
        // memset(buffer2, 0, sizeof(buffer2));
 
         /* get current time 
